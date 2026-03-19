@@ -1,37 +1,42 @@
 # Clawmark
 
-Persistent memory for OpenClaw agents.
+**Continuity for AI agents.**
 
-Your agent learns things. Then the session ends and it's gone. Clawmark fixes that.
+Your agent solves problems, makes decisions, learns things. Then the session ends. Next session — blank slate. You explain the same architecture decision for the third time. You re-debug the same issue. The agent is capable. It just can't remember.
 
----
+Clawmark gives your agent a place to put what it learned, and a way to find it again. Semantic search, not grep. Threaded signals, not flat files. Works across sessions, compactions, and substrates.
 
-## The problem
+```
+$ clawmark signal -c "Token validation must run after refresh, not before. Lines 42-47 in auth.rs." -g "fix: auth token refresh order"
+✅ Signal 98672A90 saved
+```
 
-OpenClaw agents store memory in markdown files. `MEMORY.md` for long-term. `memory/YYYY-MM-DD.md` for daily logs. Both get read into the prompt on every turn.
+47 sessions later:
 
-It breaks in three ways:
+```
+$ clawmark tune "authentication middleware"
+98672A90 | 2026-03-19 18:47 | fix: auth token refresh order (0.487)
+```
 
-1. **Search doesn't work.** Finding a specific insight from two weeks ago means grepping markdown files. Your agent can't search by meaning — only by keywords that happen to match.
+Zero re-explanation.
 
-2. **Context bloats.** Every interaction appends to the daily log. The files grow. The prompt grows. Token costs grow. Eventually the context fills and your agent either truncates (loses history) or starts fresh (loses everything).
+## Works with everything
 
-3. **Sessions don't connect.** What your agent learned at 2am is gone by morning. The next session reads today's file and yesterday's. Last week's breakthrough? Buried in `memory/2026-03-12.md`, never loaded.
+| Framework | How |
+|-----------|-----|
+| **OpenClaw** | `clawmark capture --openclaw` imports MEMORY.md + daily logs |
+| **Claude Code** | Signal from hooks or inline. Reads CLAUDE.md context. |
+| **Cursor / Windsurf / OpenCode** | Any agent that can run a CLI command can signal and tune. |
+| **Aider** | Shell commands in-session. |
+| **Custom agents** | `clawmark signal` and `clawmark tune` are just binaries. If your agent can exec, it can remember. |
 
-## The fix
+No runtime dependency. No API key. No account. One 31MB binary.
+
+## Install
 
 ```bash
 cargo install clawmark
 ```
-
-Two steps. Then your memory works.
-
-```bash
-clawmark migrate                    # import your OpenClaw memory
-clawmark backfill                   # enable semantic search
-```
-
-That's it. Your `MEMORY.md` and daily logs become searchable signals. Your agent finds things by meaning, not by grepping markdown.
 
 ## What it looks like
 
@@ -84,23 +89,19 @@ Search is semantic by default — a built-in BERT model (paraphrase-multilingual
 
 Signals thread — a follow-up references its parent, forming chains. Conversations, not flat lists.
 
-## Migrating from OpenClaw memory
+## Capture existing knowledge
 
-Clawmark reads your existing OpenClaw workspace and imports everything:
+Already have notes, docs, or agent memory files? Bulk-load them:
 
 ```bash
-clawmark migrate                              # auto-detect ~/.openclaw/workspace
-clawmark migrate ~/path/to/workspace          # specify path
-clawmark migrate --dry-run                    # preview without importing
+clawmark capture ./docs/                      # all markdown files in a directory
+clawmark capture notes.md design.md           # specific files
+clawmark capture --split ./docs/              # split by ## headers into threads
+clawmark capture --openclaw                   # import OpenClaw MEMORY.md + daily logs
+clawmark capture --dry-run ./notes/           # preview without importing
 ```
 
-What gets imported:
-- **MEMORY.md** → one signal (curated long-term memory)
-- **memory/YYYY-MM-DD.md** → signals with preserved dates, split by `##` headers into threads
-
-UUIDs are generated fresh. Timestamps are preserved from filenames. Daily logs with multiple sections become threaded signals — first section is the root, subsequent sections thread to it.
-
-After migration:
+After capture:
 
 ```bash
 clawmark backfill                             # embed all content for semantic search
@@ -110,10 +111,10 @@ clawmark tune "that bug from last week"       # find it by meaning
 ## Commands
 
 ```bash
-# Import OpenClaw memory
-clawmark migrate
-clawmark migrate ~/.openclaw/workspace
-clawmark migrate --dry-run
+# Capture existing knowledge
+clawmark capture ./docs/                      # bulk-load markdown files
+clawmark capture --openclaw                   # import OpenClaw memory
+clawmark capture --split notes.md             # split by ## headers
 
 # Signal — save what you learned
 clawmark signal -c "Fixed the auth bug" -g "fix: token refresh order"
@@ -137,46 +138,32 @@ clawmark status                               # station stats
 clawmark skill                                # full usage guide for agents
 ```
 
-## Works alongside OpenClaw
+## Integration
 
-Clawmark doesn't replace OpenClaw. It runs alongside it. Your agent keeps using OpenClaw for everything — channels, tools, heartbeat, skills. Clawmark just fixes the memory.
-
-Add this to your agent's skill set and it knows how to use it:
-
-```bash
-cp $(clawmark skill --path) ~/.openclaw/skills/clawmark/SKILL.md
-```
-
-Or add clawmark commands to your agent's instructions:
+Clawmark doesn't replace your agent framework. It runs alongside it — add two lines to your agent's instructions and it knows how to remember:
 
 ```
-When you learn something worth keeping, signal it:
+When you learn something worth keeping:
   clawmark signal -c "what you learned" -g "category: compressed insight"
 
 When you need to remember something:
   clawmark tune "what you're looking for"
 ```
 
-## Why Rust, why not a skill
+For OpenClaw agents, install as a skill:
 
-Skills execute in the agent's context. Clawmark runs as a separate process — the agent calls it, gets results, moves on. This means:
+```bash
+cp $(clawmark skill --path) ~/.openclaw/skills/clawmark/SKILL.md
+```
 
-- **No token cost at rest.** The binary sits on disk until called. Skills inject into every prompt.
+## Why a binary
+
+Clawmark runs as a separate process — the agent calls it, gets results, moves on.
+
+- **No token cost at rest.** The binary sits on disk until called. No context window overhead.
 - **No security surface.** The agent can't corrupt the database. Every write is validated and parameterized.
-- **Runs on anything.** Pi 4, Pi 5, Mac, Linux server. Single static binary — `cargo install` and done.
-- **Survives OpenClaw updates.** Your memory is in SQLite, not in OpenClaw's markdown format. When OpenClaw changes their memory system (again), your signals are safe.
-
-## Performance
-
-| Metric | OpenClaw memory_search | Clawmark |
-|--------|----------------------|----------|
-| Search method | Keyword grep | Semantic (BERT) |
-| Search time | Grows with file count | <1 second (cached) |
-| Memory format | Markdown files | SQLite |
-| Threading | None | Parent-child chains |
-| Cross-session | Today + yesterday only | Full history |
-| Dependencies | Node.js 22+, pnpm | None (static binary) |
-| Binary size | — | 31MB |
+- **Runs on anything.** Pi 4, Pi 5, Mac, Linux server. Single static binary.
+- **Framework-independent.** Your memory is in SQLite, not in any framework's format. Switch tools, keep your signals.
 
 ## Build from source
 
