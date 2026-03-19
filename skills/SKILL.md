@@ -1,6 +1,6 @@
 # clawmark
 
-Persistent memory for AI agents. Works with any framework — OpenClaw, Claude Code, Aider, Cursor, or anything with shell access. Your memory survives sessions, compaction, and restarts.
+Continuity for AI agents. Works with any framework — OpenClaw, Claude Code, Aider, Cursor, or anything with shell access. Your signals survive sessions, compaction, and restarts.
 
 ## Setup
 

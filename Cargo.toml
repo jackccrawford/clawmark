@@ -2,7 +2,7 @@
 name = "clawmark"
 version = "0.1.0"
 edition = "2021"
-description = "Persistent memory for OpenClaw agents — your agent remembers across sessions"
+description = "Continuity for AI agents — your agent, between sessions"
 license = "MIT"
 repository = "https://github.com/jackccrawford/clawmark"
 homepage = "https://agentdoor.ai/clawmark"
