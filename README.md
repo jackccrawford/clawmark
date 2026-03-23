@@ -222,6 +222,37 @@ Clawmark runs as a separate process — the agent calls it, gets results, moves 
 - **Runs on anything.** Pi 4, Pi 5, Mac, Linux server. Single static binary.
 - **Framework-independent.** Your memory is in SQLite, not in any framework's format. Switch tools, keep your signals.
 
+## Fast mode: clawmark-embed
+
+Every `clawmark signal` loads the ONNX model, embeds the content, and exits. On a Mac that's 700ms. On a Raspberry Pi, 1.6 seconds. Every signal.
+
+`clawmark-embed` fixes this. It's a background process that holds the model in memory and serves embeddings over a Unix socket. The first signal pays the load cost. Every signal after that is instant.
+
+```
+$ clawmark-embed &               # start the server (auto-exits after 5 min idle)
+$ clawmark signal -c "first"     # 1.6s (model loads)
+$ clawmark signal -c "second"    # 0.04s (model already warm)
+$ clawmark signal -c "third"     # 0.04s
+```
+
+| | Mac (Apple Silicon) | Raspberry Pi 5 |
+|---|---|---|
+| Without embed server | 712ms | 1,580ms |
+| With embed server | 109ms | **40ms** |
+| Speedup | 6.5x | **39.5x** |
+
+The slower the hardware, the bigger the win. No configuration — `clawmark signal` checks for the socket automatically. If the server isn't running, it falls back to loading the model inline. Zero setup, zero risk.
+
+```bash
+# Start it
+clawmark-embed &
+
+# Or with custom idle timeout (default 300s)
+CLAWMARK_EMBED_IDLE=600 clawmark-embed &
+
+# It auto-exits when idle. No stale processes.
+```
+
 ## Build from source
 
 ```bash
