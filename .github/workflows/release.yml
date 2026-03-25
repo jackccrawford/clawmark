@@ -22,9 +22,6 @@ jobs:
           - target: aarch64-apple-darwin
             os: macos-14
             name: darwin-arm64
-          - target: x86_64-apple-darwin
-            os: macos-14
-            name: darwin-amd64
 
     runs-on: ${{ matrix.os }}
     steps:
@@ -67,7 +64,7 @@ jobs:
       - name: Package and checksum
         run: |
           cd target/${{ matrix.target }}/release
-          # For Linux, include libonnxruntime.so alongside the binary
+          # Bundle ORT shared library for Linux (dynamic linking)
           if [ "${{ runner.os }}" = "Linux" ]; then
             cp /usr/local/lib/libonnxruntime.so.1.22.0 .
             tar czf ../../../clawmark-${{ matrix.name }}.tar.gz clawmark libonnxruntime.so.1.22.0
