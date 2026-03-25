@@ -22,6 +22,9 @@ jobs:
           - target: aarch64-apple-darwin
             os: macos-14
             name: darwin-arm64
+          - target: x86_64-apple-darwin
+            os: macos-14
+            name: darwin-amd64
 
     runs-on: ${{ matrix.os }}
     steps:
@@ -40,11 +43,20 @@ jobs:
           echo "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc" >> $GITHUB_ENV
           echo "CC_aarch64_unknown_linux_gnu=aarch64-linux-gnu-gcc" >> $GITHUB_ENV
           echo "CXX_aarch64_unknown_linux_gnu=aarch64-linux-gnu-g++" >> $GITHUB_ENV
-          # Install Microsoft ORT 1.22 for ARM64 (glibc 2.27, compatible with Pi OS Bookworm)
-          curl -sL https://github.com/microsoft/onnxruntime/releases/download/v1.22.0/onnxruntime-linux-aarch64-1.22.0.tgz | tar xz -C /tmp
-          sudo cp /tmp/onnxruntime-linux-aarch64-1.22.0/lib/libonnxruntime.so.1.22.0 /usr/local/lib/
+
+      - name: Install system ORT (Linux — dynamic link, glibc 2.27 compatible)
+        if: runner.os == 'Linux'
+        run: |
+          if [ "${{ matrix.target }}" = "aarch64-unknown-linux-gnu" ]; then
+            ORT_ARCHIVE="onnxruntime-linux-aarch64-1.22.0"
+          else
+            ORT_ARCHIVE="onnxruntime-linux-x64-1.22.0"
+          fi
+          curl -sL "https://github.com/microsoft/onnxruntime/releases/download/v1.22.0/${ORT_ARCHIVE}.tgz" | tar xz -C /tmp
+          sudo cp /tmp/${ORT_ARCHIVE}/lib/libonnxruntime.so.1.22.0 /usr/local/lib/
           sudo ln -sf libonnxruntime.so.1.22.0 /usr/local/lib/libonnxruntime.so
-          sudo cp -r /tmp/onnxruntime-linux-aarch64-1.22.0/include/* /usr/local/include/
+          sudo ln -sf libonnxruntime.so.1.22.0 /usr/local/lib/libonnxruntime.so.1
+          sudo cp -r /tmp/${ORT_ARCHIVE}/include/* /usr/local/include/
           sudo ldconfig
           echo "ORT_LIB_LOCATION=/usr/local/lib" >> $GITHUB_ENV
           echo "ORT_PREFER_DYNAMIC_LINK=1" >> $GITHUB_ENV
@@ -55,8 +67,8 @@ jobs:
       - name: Package and checksum
         run: |
           cd target/${{ matrix.target }}/release
-          # For ARM64 Linux, include libonnxruntime.so alongside the binary
-          if [ "${{ matrix.target }}" = "aarch64-unknown-linux-gnu" ]; then
+          # For Linux, include libonnxruntime.so alongside the binary
+          if [ "${{ runner.os }}" = "Linux" ]; then
             cp /usr/local/lib/libonnxruntime.so.1.22.0 .
             tar czf ../../../clawmark-${{ matrix.name }}.tar.gz clawmark libonnxruntime.so.1.22.0
           else
