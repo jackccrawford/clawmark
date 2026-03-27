@@ -4,6 +4,7 @@ set -e
 REPO="jackccrawford/clawmark"
 CLAWMARK_HOME="${CLAWMARK_HOME:-$HOME/.clawmark}"
 INSTALL_DIR="${CLAWMARK_HOME}/bin"
+LIB_DIR="${CLAWMARK_HOME}/lib"
 
 # Detect platform
 OS="$(uname -s)"
@@ -63,30 +64,101 @@ if [ -f "$TMPDIR/clawmark.sha256" ]; then
   echo "  Checksum verified."
 fi
 
-# Extract and install
+# Extract
 mkdir -p "$INSTALL_DIR"
 mkdir -p "$TMPDIR/extract"
 tar xzf "$TMPDIR/clawmark.tar.gz" -C "$TMPDIR/extract"
 cp "$TMPDIR/extract/clawmark" "$INSTALL_DIR/"
 chmod +x "${INSTALL_DIR}/clawmark"
 
-# Install bundled libonnxruntime if present (ARM64 Linux)
-if [ -f "$TMPDIR/extract/libonnxruntime.so.1.22.0" ]; then
-  LIB_DIR="${CLAWMARK_HOME}/lib"
+# Install clawmark-embed if present
+if [ -f "$TMPDIR/extract/clawmark-embed" ]; then
+  cp "$TMPDIR/extract/clawmark-embed" "$INSTALL_DIR/"
+  chmod +x "${INSTALL_DIR}/clawmark-embed"
+fi
+
+# Install bundled ONNX Runtime if present
+# Linux: libonnxruntime.so.* | Mac: libonnxruntime.*.dylib
+BUNDLED_LIB=""
+for f in "$TMPDIR/extract"/libonnxruntime.so.* "$TMPDIR/extract"/libonnxruntime.*.dylib; do
+  [ -f "$f" ] && BUNDLED_LIB="$f" && break
+done
+
+if [ -n "$BUNDLED_LIB" ]; then
   mkdir -p "$LIB_DIR"
-  cp "$TMPDIR/extract/libonnxruntime.so.1.22.0" "$LIB_DIR/"
-  ln -sf libonnxruntime.so.1.22.0 "$LIB_DIR/libonnxruntime.so"
-  ln -sf libonnxruntime.so.1.22.0 "$LIB_DIR/libonnxruntime.so.1"
-  # Wrapper script — finds lib relative to bin, no env var modification needed
-  mv "${INSTALL_DIR}/clawmark" "${INSTALL_DIR}/clawmark.bin"
-  cat > "${INSTALL_DIR}/clawmark" <<'WRAPPER'
+  LIB_NAME=$(basename "$BUNDLED_LIB")
+  cp "$BUNDLED_LIB" "$LIB_DIR/"
+
+  if [ "$os" = "linux" ]; then
+    # Linux symlinks
+    ln -sf "$LIB_NAME" "$LIB_DIR/libonnxruntime.so"
+    ln -sf "$LIB_NAME" "$LIB_DIR/libonnxruntime.so.1"
+    # Wrapper script for LD_LIBRARY_PATH
+    mv "${INSTALL_DIR}/clawmark" "${INSTALL_DIR}/clawmark.bin"
+    cat > "${INSTALL_DIR}/clawmark" <<'WRAPPER'
 #!/bin/sh
-DIR="$(cd "$(dirname "$0")" && pwd)"
+SELF="$0"; while [ -L "$SELF" ]; do SELF="$(readlink "$SELF")"; done
+DIR="$(cd "$(dirname "$SELF")" && pwd)"
 export LD_LIBRARY_PATH="${DIR}/../lib:${LD_LIBRARY_PATH}"
 exec "${DIR}/clawmark.bin" "$@"
 WRAPPER
-  chmod +x "${INSTALL_DIR}/clawmark"
+    chmod +x "${INSTALL_DIR}/clawmark"
+    # Same for clawmark-embed if present
+    if [ -f "${INSTALL_DIR}/clawmark-embed" ]; then
+      mv "${INSTALL_DIR}/clawmark-embed" "${INSTALL_DIR}/clawmark-embed.bin"
+      cat > "${INSTALL_DIR}/clawmark-embed" <<'WRAPPER'
+#!/bin/sh
+SELF="$0"; while [ -L "$SELF" ]; do SELF="$(readlink "$SELF")"; done
+DIR="$(cd "$(dirname "$SELF")" && pwd)"
+export LD_LIBRARY_PATH="${DIR}/../lib:${LD_LIBRARY_PATH}"
+exec "${DIR}/clawmark-embed.bin" "$@"
+WRAPPER
+      chmod +x "${INSTALL_DIR}/clawmark-embed"
+    fi
+  else
+    # macOS: copy both versioned and unversioned dylib
+    for f in "$TMPDIR/extract"/libonnxruntime*.dylib; do
+      [ -f "$f" ] && cp "$f" "$LIB_DIR/"
+    done
+    # Wrapper script for DYLD_LIBRARY_PATH
+    mv "${INSTALL_DIR}/clawmark" "${INSTALL_DIR}/clawmark.bin"
+    cat > "${INSTALL_DIR}/clawmark" <<'WRAPPER'
+#!/bin/sh
+SELF="$0"; while [ -L "$SELF" ]; do SELF="$(readlink "$SELF")"; done
+DIR="$(cd "$(dirname "$SELF")" && pwd)"
+export DYLD_LIBRARY_PATH="${DIR}/../lib:${DYLD_LIBRARY_PATH}"
+exec "${DIR}/clawmark.bin" "$@"
+WRAPPER
+    chmod +x "${INSTALL_DIR}/clawmark"
+    if [ -f "${INSTALL_DIR}/clawmark-embed" ]; then
+      mv "${INSTALL_DIR}/clawmark-embed" "${INSTALL_DIR}/clawmark-embed.bin"
+      cat > "${INSTALL_DIR}/clawmark-embed" <<'WRAPPER'
+#!/bin/sh
+SELF="$0"; while [ -L "$SELF" ]; do SELF="$(readlink "$SELF")"; done
+DIR="$(cd "$(dirname "$SELF")" && pwd)"
+export DYLD_LIBRARY_PATH="${DIR}/../lib:${DYLD_LIBRARY_PATH}"
+exec "${DIR}/clawmark-embed.bin" "$@"
+WRAPPER
+      chmod +x "${INSTALL_DIR}/clawmark-embed"
+    fi
+  fi
   echo "  Bundled ONNX Runtime installed."
+fi
+
+# Symlink to a PATH location
+SYMLINK_DIR=""
+if [ -d "$HOME/.local/bin" ]; then
+  SYMLINK_DIR="$HOME/.local/bin"
+elif [ -d "/usr/local/bin" ] && [ -w "/usr/local/bin" ]; then
+  SYMLINK_DIR="/usr/local/bin"
+fi
+
+if [ -n "$SYMLINK_DIR" ]; then
+  ln -sf "${INSTALL_DIR}/clawmark" "$SYMLINK_DIR/clawmark"
+  if [ -f "${INSTALL_DIR}/clawmark-embed" ]; then
+    ln -sf "${INSTALL_DIR}/clawmark-embed" "$SYMLINK_DIR/clawmark-embed"
+  fi
+  echo "  Linked to ${SYMLINK_DIR}/clawmark"
 fi
 
 # Verify
@@ -96,11 +168,19 @@ if "${INSTALL_DIR}/clawmark" --version > /dev/null 2>&1; then
   echo "  Installed: ${VERSION}"
   echo "  Location:  ${CLAWMARK_HOME}/"
   echo ""
-  # Check PATH
-  case ":$PATH:" in
-    *":${INSTALL_DIR}:"*) ;;
-    *) echo "  Add to PATH: export PATH=\"${INSTALL_DIR}:\$PATH\"" ;;
-  esac
+
+  # Check if clawmark is on PATH now
+  if command -v clawmark > /dev/null 2>&1; then
+    echo "  Ready to use: clawmark"
+  elif [ -n "$SYMLINK_DIR" ]; then
+    case ":$PATH:" in
+      *":${SYMLINK_DIR}:"*) echo "  Ready to use: clawmark" ;;
+      *) echo "  Add to PATH: export PATH=\"${SYMLINK_DIR}:\$PATH\"" ;;
+    esac
+  else
+    echo "  Add to PATH: export PATH=\"${INSTALL_DIR}:\$PATH\""
+  fi
+
   echo ""
   echo "  Next: clawmark signal -c \"Hello from clawmark\" -g \"first signal\""
 else
