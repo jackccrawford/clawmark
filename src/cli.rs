@@ -126,4 +126,23 @@ pub enum Command {
 
     /// Show station stats
     Status,
+
+    /// MCP server for Claude Desktop — run, install, or check status
+    #[command(subcommand)]
+    Mcp(McpCommand),
+}
+
+#[derive(Subcommand)]
+pub enum McpCommand {
+    /// Run as MCP server (stdio transport — used by Claude Desktop internally)
+    Serve,
+
+    /// Install Geniuz into Claude Desktop config
+    #[command(
+        after_help = "Adds clawmark as an MCP server in Claude Desktop's config file.\nAfter running this, restart Claude Desktop to activate Geniuz.\n\nYour Claude will have three new tools: remember, recall, recall_recent."
+    )]
+    Install,
+
+    /// Check if Geniuz is configured in Claude Desktop
+    Status,
 }
