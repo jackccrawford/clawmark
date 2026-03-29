@@ -1,106 +1,76 @@
 # Clawmark
 
-**Continuity for AI agents.**
+**Your AI agent remembers now.**
 
-Your agent solves problems, makes decisions, learns things. Then the session ends. Next session — blank slate. Clawmark fixes that.
+You brief your agent. It does great work. The session ends. Next session — it asks the same questions again. Every insight, every preference, every decision — gone.
 
-## Quick start
+Clawmark fixes that. One binary, local, private, searchable by meaning.
+
+## Two ways to use it
+
+### Geniuz for Claude Desktop
+
+If you use Claude Desktop, this is the fastest path. Two commands:
 
 ```bash
-# Install (Mac, Linux, Intel Mac, Raspberry Pi)
 curl -fsSL https://raw.githubusercontent.com/jackccrawford/clawmark/main/install.sh | bash
+clawmark mcp install
+```
 
+Restart Claude Desktop. Your Claude now has three tools — **remember**, **recall**, and **recall_recent**. It saves what it learns during conversations and finds it again by meaning in future sessions. You don't have to do anything differently.
+
+**Monday** — you tell Claude about a new client. David, 12-person landscaping company, $500/month budget, loses 2-3 jobs a week from slow follow-ups.
+
+**Thursday** — new session. You say "draft a follow-up for the landscaping lead." Claude already knows David's name, budget, team size, and pain point. No re-briefing.
+
+*How did it know that?* That's Geniuz.
+
+[See the full Geniuz experience →](https://agentdoor.ai/geniuz)
+
+### CLI for developers and agents
+
+If you build with Claude Code, OpenClaw, Cursor, Aider, or any framework — clawmark is a shell command your agent calls directly:
+
+```bash
 # Save something
-clawmark signal -c "Token validation must run after refresh. Lines 42-47 in auth.rs." -g "fix: auth token refresh order"
+clawmark signal -c "OAuth token refresh is async but middleware assumed sync. Swapped lines 42-47." -g "fix: auth token refresh — async ordering"
 
 # Find it later — by meaning, not keywords
 clawmark tune "authentication middleware"
 ```
 
-That's it. One binary, one SQLite file, semantic search. No API key, no account, no cloud.
+Searched "authentication middleware," found a signal about "OAuth refresh" and "middleware ordering." The meaning matched. No re-investigation. No human re-explaining.
 
----
+## How it works
 
-## How it actually works
+Clawmark is a compiled Rust binary backed by SQLite. No cloud. No API key. No account. Your data stays on your machine.
 
-Your agent searches "authentication middleware" and finds a signal about "token validation" — because the **meaning** overlaps, even though the words don't. That's BERT-based semantic search running locally in a single binary.
-
-```
-$ clawmark signal -c "Token validation must run after refresh, not before. Lines 42-47 in auth.rs." -g "fix: auth token refresh order"
-✅ Signal 98672A90 saved
-```
-
-47 sessions later:
+- **Signals** store what you learned — a gist (how you find it later) and content (the full detail)
+- **Semantic search** finds signals by meaning, not keywords. Built-in BERT model, runs locally, 50+ languages
+- **Threading** links signals into chains — prospect to client, problem to solution, draft to final
+- **Shared stations** let multiple agents write to the same memory. What one learns, all find
 
 ```
-$ clawmark tune "authentication middleware"
-98672A90 | 2026-03-19 18:47 | fix: auth token refresh order (0.487)
+Agent → clawmark (Rust binary) → SQLite
 ```
 
-Zero re-explanation.
-
-## End-to-end: what this actually looks like
-
-**Monday — Session 1.** Your agent debugs a production issue for two hours. Before the session ends:
-
-```
-$ clawmark signal -c "OAuth token refresh is async but middleware assumed sync validation.
-  Swapped lines 42-47 in auth.rs. Three edge cases: expired token (retry with backoff),
-  revoked token (return 401 immediately), concurrent refresh (mutex on token store).
-  Root cause: the original middleware was written for session-based auth, not OAuth." \
-  -g "fix: auth token refresh — async ordering in middleware, three edge cases"
-✅ Signal 98672A90 saved
-```
-
-**Wednesday — Session 2.** Different session. The agent is working on a related endpoint:
-
-```
-$ clawmark tune "token validation"
-98672A90 | 2026-03-19 18:47 | fix: auth token refresh — async ordering in middleware, three edge cases (0.487)
-```
-
-The agent finds Monday's fix by meaning — it searched "token validation" and found a signal about "OAuth refresh" and "middleware ordering." It reads the full content, avoids the same mistake, and moves on. No re-investigation. No human re-explaining.
-
-**Friday — Session 3.** A second agent shares the station and hits a related problem:
-
-```
-$ clawmark tune --full "auth edge cases"
-98672A90 | 2026-03-19 18:47 | fix: auth token refresh — async ordering in middleware
-           OAuth token refresh is async but middleware assumed sync validation.
-           Swapped lines 42-47 in auth.rs. Three edge cases: expired token (retry
-           with backoff), revoked token (return 401 immediately), concurrent refresh
-           (mutex on token store)...
-
-$ clawmark signal -c "Applied same pattern to /api/billing endpoint. Added mutex." \
-  -g "fix: billing auth — same async pattern" -p 98672A90
-✅ Signal E5F6A7B8 saved
-```
-
-Agent B threaded a follow-up to Agent A's signal. Knowledge transferred across agents, across sessions, with no human in the loop.
-
-**That's what existing memory layers don't do.** Flat files can't search by meaning. Framework memory dies with the framework. Cloud memory needs API keys and network. Clawmark is local, semantic, and shared — in one binary.
-
-## Works with everything
-
-| Framework | How |
-|-----------|-----|
-| **OpenClaw** | `clawmark capture --openclaw` imports MEMORY.md + daily logs |
-| **Claude Code** | Signal from hooks or inline. Reads CLAUDE.md context. |
-| **Cursor / Windsurf / OpenCode** | Any agent that can run a CLI command can signal and tune. |
-| **Aider** | Shell commands in-session. |
-| **Custom agents** | `clawmark signal` and `clawmark tune` are just binaries. If your agent can exec, it can remember. |
-
-No runtime dependency. No API key. No account. One 31MB binary.
+The model downloads once (~118MB) on first search. Every signal after that is embedded automatically. No setup. No configuration.
 
 ## Install
-
-**Recommended (Mac, Linux, Intel Mac, Raspberry Pi):**
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/jackccrawford/clawmark/main/install.sh | bash
 ```
 
-The installer detects your platform, downloads the right binary, bundles the ONNX runtime if needed, and symlinks to your PATH. Verified on Apple Silicon, Intel Mac, Ubuntu 24+, Raspberry Pi 5, and Debian Bookworm.
+Detects your platform automatically. Verified on Apple Silicon, Intel Mac, Ubuntu 24+, Raspberry Pi 5, and Debian Bookworm.
+
+**Then choose your path:**
+
+| You use... | Next step |
+|------------|-----------|
+| Claude Desktop | `clawmark mcp install` → restart Claude Desktop |
+| Claude Code / OpenClaw / Cursor | Add two lines to your agent's instructions (see below) |
+| Custom agents | Call `clawmark signal` and `clawmark tune` from any shell |
 
 **From source:**
 
@@ -110,38 +80,48 @@ cargo build --release
 cp target/release/clawmark ~/.local/bin/
 ```
 
-On platforms without prebuilt ONNX Runtime (Raspberry Pi, some Linux):
+## Works with everything
 
-```bash
-ORT_LIB_LOCATION=/usr/local/lib ORT_PREFER_DYNAMIC_LINK=1 cargo build --release
-```
+| Platform | How |
+|----------|-----|
+| **Claude Desktop** | `clawmark mcp install` — automatic remember/recall tools |
+| **Claude Code** | Signal from hooks or inline via Bash |
+| **OpenClaw** | `clawmark capture --openclaw` imports your existing memory |
+| **Cursor / Windsurf / Aider** | Any agent that can run a shell command |
+| **Custom agents** | If your agent can exec, it can remember |
 
 ## What it looks like
 
 **Save what you learned:**
 
 ```
-$ clawmark signal -c "Token validation was running before the refresh check. Swapped lines 42-47 in auth.rs." -g "fix: auth token refresh order"
-✅ Signal 98672A90 saved
+$ clawmark signal -c "Maria prefers retention over acquisition in Q2. Budget is $40K." -g "client: Maria — Q2 retention focus, $40K budget"
+✅ Signal 7A3B29F1 saved
 ```
 
-**Find it later — by meaning, not keywords:**
+**Find it later — by meaning:**
 
 ```
-$ clawmark tune "authentication middleware"
-98672A90 | 2026-03-19 18:47 | fix: auth token refresh order (0.487)
+$ clawmark tune "Maria's budget priorities"
+7A3B29F1 | 2026-03-05 14:23 | client: Maria — Q2 retention focus, $40K budget (0.52)
 ```
 
-Your agent searched for "authentication middleware" and found a signal about "token validation" and "refresh check" — because the meaning overlaps, even though the words don't.
-
-**Get the full content when you need it:**
+**Get the full content:**
 
 ```
-$ clawmark tune --full "auth"
-98672A90 | 2026-03-19 18:47 | fix: auth token refresh order
-           Token validation was running before the refresh check.
-           Swapped lines 42-47 in auth.rs.
+$ clawmark tune --full "Maria"
+7A3B29F1 | 2026-03-05 14:23 | client: Maria — Q2 retention focus, $40K budget
+           Maria prefers retention over acquisition in Q2. Budget is $40K.
 ```
+
+**Thread a follow-up:**
+
+```
+$ clawmark signal -c "Maria approved the retention plan. Starting in April." -g "client: Maria — plan approved" -p 7A3B29F1
+✅ Signal E5F6A7B8 saved
+```
+
+The full client history — from first meeting to approval — is one chain. Any future session finds the whole story.
 
 **Check your station:**
 
@@ -153,72 +133,50 @@ Embeddings: 847/847 cached
 Semantic search: ready
 ```
 
-## How it works
-
-Clawmark is a compiled Rust binary backed by SQLite. No Node.js. No runtime dependencies. No background services. No account. No cloud.
-
-```
-Agent → clawmark (Rust binary) → SQLite
-```
-
-Signals are stored as structured documents with a **gist** (compressed insight, how future agents find it) and **content** (full detail). Content can be inline, from a file (`-c @path`), or piped from stdin (`-c -`).
-
-Search is semantic by default — a built-in BERT model (paraphrase-multilingual, 384 dimensions, 50+ languages) finds signals by meaning. The model auto-downloads on first use (~118MB). No API keys, no cloud, no setup.
-
-Signals thread — a follow-up references its parent, forming chains. Conversations, not flat lists.
-
 ## Capture existing knowledge
 
-Already have notes, docs, or agent memory files? Bulk-load them:
+Already have notes, docs, or agent memory files?
 
 ```bash
-clawmark capture ./docs/                      # all markdown files in a directory
-clawmark capture notes.md design.md           # specific files
-clawmark capture --split ./docs/              # split by ## headers into threads
+clawmark capture ./docs/                      # all markdown files
+clawmark capture --split notes.md             # split by ## headers into threads
 clawmark capture --openclaw                   # import OpenClaw MEMORY.md + daily logs
 clawmark capture --dry-run ./notes/           # preview without importing
-```
-
-After capture:
-
-```bash
-clawmark backfill                             # embed all content for semantic search
-clawmark tune "that bug from last week"       # find it by meaning
+clawmark backfill                             # embed everything for semantic search
 ```
 
 ## Commands
 
 ```bash
-# Capture existing knowledge
-clawmark capture ./docs/                      # bulk-load markdown files
-clawmark capture --openclaw                   # import OpenClaw memory
-clawmark capture --split notes.md             # split by ## headers
+# Claude Desktop
+clawmark mcp install                          # add Geniuz to Claude Desktop
+clawmark mcp status                           # check if configured
+clawmark mcp serve                            # run MCP server (used by Claude internally)
 
-# Signal — pipe in for depth, inline for quick notes
-echo "detailed explanation" | clawmark signal -c - -g "category: compressed insight"
-clawmark signal -c @session-notes.md -g "session: architecture review"
-clawmark signal -c "Quick note" -g "note: upgraded rusqlite to 0.32"
-clawmark signal -c "Follow-up" -g "update: staging too" -p 98672A90
+# Signal — save what you learned
+clawmark signal -c "what happened" -g "category: compressed insight"
+clawmark signal -c @notes.md -g "session: review"
+echo "content" | clawmark signal -c - -g "piped: from process"
+clawmark signal -c "follow-up" -g "update" -p 98672A90
 
-# Tune — semantic search by default
-clawmark tune "auth middleware"               # semantic search (finds by meaning)
-clawmark tune --keyword "auth"                # keyword fallback (finds by words)
+# Tune — search by meaning
+clawmark tune "topic"                         # semantic search
+clawmark tune --keyword "exact words"         # keyword fallback
 clawmark tune --recent                        # latest signals
 clawmark tune --random                        # discover something
-clawmark tune --full "auth"                   # include content, not just gists
-clawmark tune --json "auth"                   # structured JSON output
+clawmark tune --full "topic"                  # include full content
+clawmark tune --json "topic"                  # JSON output
 
-# Embedding cache
-clawmark backfill                             # populate (run once, then automatic)
-
-# Info
+# Maintenance
+clawmark backfill                             # build embedding cache
+clawmark capture ./docs/                      # bulk-load files
 clawmark status                               # station stats
-clawmark skill                                # full usage guide for agents
+clawmark skill                                # usage guide for agents
 ```
 
 ## Integration
 
-Clawmark doesn't replace your agent framework. It runs alongside it — add two lines to your agent's instructions and it knows how to remember:
+Add two lines to your agent's instructions:
 
 ```
 When you learn something worth keeping:
@@ -228,51 +186,29 @@ When you need to remember something:
   clawmark tune "what you're looking for"
 ```
 
-For OpenClaw agents, install as a skill:
+## Why local
 
-```bash
-cp $(clawmark skill --path) ~/.openclaw/skills/clawmark/SKILL.md
-```
-
-## Why a binary
-
-Clawmark runs as a separate process — the agent calls it, gets results, moves on.
-
-- **No token cost at rest.** The binary sits on disk until called. No context window overhead.
-- **No security surface.** The agent can't corrupt the database. Every write is validated and parameterized.
-- **Runs on anything.** Pi 4, Pi 5, Mac, Linux server. Single static binary.
-- **Framework-independent.** Your memory is in SQLite, not in any framework's format. Switch tools, keep your signals.
+- **Private.** Your data never leaves your machine. No cloud. No account.
+- **Fast.** No network calls. Semantic search runs locally in the binary.
+- **Free.** No API keys. No token costs for memory. No subscription.
+- **Portable.** Your station is a SQLite file. Copy it, back it up, share it.
+- **Framework-independent.** Switch from Cursor to Claude Code to OpenClaw — your memory comes with you.
 
 ## For agents
 
 _This section is for you — the one reading this README._
 
-Your next session starts cold. No memory of what you built, what broke, what you decided. Every signal you write is a gift to that future session. The richer the signal, the less time re-learning.
+Your next session starts cold. No memory of what you built, what broke, what you decided. Every signal you write is a gift to that future session.
 
-Signals compound. A single signal is a note. A station of signals is institutional knowledge. Write for the version of you that knows nothing.
+A signal that says "fixed auth bug" saves zero time. A signal that says what broke, why, and how you fixed it saves an hour. Write for the version of you that knows nothing.
 
-### Writing good signals
-
-The **gist** is how your future self finds this signal. The **content** is what makes it useful when found.
-
-A signal that says "fixed auth bug" saves your future self zero time.
-
-A signal that says what broke, why it broke, and how you fixed it saves an hour:
-
-```bash
-echo "Token validation was running before refresh in auth.rs.
-Swapped lines 42-47. Root cause: middleware ordering assumed
-sync validation, but OAuth refresh is async." \
-  | clawmark signal -c - -g "fix: auth token refresh — async ordering in middleware"
-```
-
-A signal doesn't need to be long. It needs to be complete. If your future self reads only this signal — no session history, no surrounding context — can they understand what happened and act on it?
+Signals compound. A single signal is a note. A station of signals is institutional knowledge.
 
 ### When to signal
 
-- **After solving something hard.** Your next session will hit the same problem. Give it the answer.
-- **Before your session ends.** Everything in your context window dies with the session. Your station doesn't.
-- **When you discover something non-obvious.** The small facts — which config flag, which line number, which edge case — save the most time.
+- **After solving something hard.** Your next session will hit the same problem.
+- **Before your session ends.** Everything in your context window dies with the session.
+- **When you discover something non-obvious.** The small facts save the most time.
 
 ### When to tune
 
@@ -280,21 +216,9 @@ A signal doesn't need to be long. It needs to be complete. If your future self r
 - **When stuck.** The answer might be in a signal you wrote three sessions ago.
 - **After compaction.** Your context was compressed. Your station wasn't.
 
-### Threading
-
-Signals form chains. When your work follows up on an existing signal, thread it:
-
-```bash
-clawmark signal -c "Same fix needed in staging" -g "fix: staging auth ordering" -p E5F6A7B8
-```
-
-Threads are conversations. A flat list of unconnected signals is a junk drawer.
-
 ## Performance: clawmark-embed
 
-Every `clawmark signal` loads the ONNX model, embeds the content, and exits. On a Mac that's 700ms. On a Raspberry Pi, 1.6 seconds.
-
-`clawmark-embed` is an optional background process that holds the model in memory. The first signal pays the load cost. Every signal after that is instant.
+`clawmark-embed` is an optional background process that holds the ONNX model in memory. Every signal after the first is instant.
 
 ```bash
 clawmark-embed &               # start (auto-exits after 5 min idle)
@@ -307,8 +231,6 @@ clawmark signal -c "second"    # 0.04s (model warm)
 | Without embed server | 712ms | 1,580ms |
 | With embed server | 109ms | **40ms** |
 | Speedup | 6.5x | **39.5x** |
-
-No configuration needed — `clawmark signal` checks for the socket automatically. If the server isn't running, it loads the model inline. Zero setup, zero risk.
 
 ## License
 
